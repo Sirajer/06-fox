@@ -179,13 +179,50 @@ void print_heap(int* heap, int size) {
 ////////////////////////////////////////////////////////////////////////////////
 // FILL THIS IN, see documentation in 'gc.h' ///////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
+//TODO:: REMOVE WHILE(TRUE) HOW TO TELL WHEN DONE???
 int* mark( int* stack_top
          , int* first_frame
          , int* stack_bottom
          , int* heap_start)
 {
-  return heap_start;
+  // traverse from top to first frame
+  int* heap_max = heap_start;
+  while (stack_top != stack_bottom)
+  {
+    if(stack_top == first_frame)
+    {
+      first_frame = (int*) *first_frame;
+      stack_top = stack_top + 2;
+      continue;
+    }
+    int current = *stack_top;
+    if ((current & 7) == 1) //is tuple. go to heap.
+    {
+      int * heap_current = (current - 1);
+      markTuple(heap_current);
+      if (heap_current > heap_max)
+        heap_max = heap_current;
+    }
+    stack_top = stack_top + 1;
+  }
+  return heap_max;
 }
+
+void markTuple(int * tupleStart)
+{
+  int length = *tupleStart;
+  tupleStart = tupleStart + 1;
+  *tupleStart = 1;
+  for (int i = 0; i < length; i ++)
+  {
+    tupleStart = tupleStart + 1;
+    int temp = *tupleStart;
+    if ((temp & 7) == 1)
+      markTuple(temp - 1);
+  }
+}
+//QUESTIONS: IS everything a tuple? heap start is guaranteed to be start of a tuple?
+//While true in mark
 
 ////////////////////////////////////////////////////////////////////////////////
 // FILL THIS IN, see documentation in 'gc.h' ///////////////////////////////////
@@ -193,7 +230,29 @@ int* mark( int* stack_top
 int* forward( int* heap_start
             , int* max_address)
 {
-  return heap_start;
+  //go through heap, setting gc word to compacted address. return address immediately following.
+  int * current = heap_start;
+  int * sendTo = heap_start;
+  int length = 0;
+  while (current <= max_address)
+  {
+    length = *current;
+    current = current + 1;
+    if(*current == 0)
+    {
+      current = current + (length + 1);
+      continue;
+    }
+    else if (*current == 1)
+    {
+      *current = sendTo;        //CURRENTLY SETTING ADDRESS TO LENGTH CELL
+      *current = *current + 1;
+      sendTo = sendTo + (length + 2)
+      current = current + (length + 1);
+    }
+
+  }
+  return sendTo;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -205,6 +264,59 @@ void redirect( int* stack_bottom
              , int* heap_start
              , int* max_address )
 {
+  //Go through stack and update, thene go through heap and update.
+  //STACK
+  int current = *stack_top;
+  int * currpointer = stack_top;
+  int * currFrame = first_frame;
+  int * heappointer;
+  while(currpointer != stack_bottom)
+  {
+    //Check if = currFrame
+    if(currpointer == currFrame)
+    {
+      currFrame = (int*) *currFrame;
+      currpointer = currpointer + 2;
+      continue;
+    }
+    current = *currpointer;
+    if ((current & 7) != 1) //is not tuple. view next
+    {
+      currpointer = currpointer + 1;
+      continue;
+    }
+    else  //is tuple: update address
+    {
+      heappointer = (int *) (current - 1);
+      heappointer = heappointer + 1; //gc word - includes address to move to. 
+      int newAddress = *heappointer;
+      *currpointer = newAddress;
+      currpointer = currpointer + 1;
+    }
+  }
+  //HEAP
+  currpointer = heap_start;
+  while(currpointer <= max_address)
+  {
+    int length = *currpointer;
+    currpointer = currpointer + 1; //gc word
+    for (int i = 0; i < length; i++)
+    {
+      currpointer = currpointer + 1;
+      //check if address
+      int temp = *currpointer;
+      if ((temp & 7) == 1) //is address
+      {
+        //look up address and update with the new
+        int * tempptr = (int *) (*currpointer - 1);
+        tempptr = tempptr + 1; //gc
+        int newAddress = *tempptr;
+        *currpointer = newAddress;
+
+      }
+    }
+    currpointer = currpointer + 1;
+  }
   return; 
 }
 
@@ -215,6 +327,32 @@ void compact( int* heap_start
             , int* max_address
             , int* heap_end )
 { 
+  //SET THE GC WORDS TO ZERO HERE
+  int * current = heap_start;
+  int * moveTo = heap_start;
+  while (current <= max_address)
+  {
+    int length = *current;
+    current = current + 1; //gc
+    if (*current == 0)
+    {
+      current = current + (length + 1);
+      continue;
+    }
+    *moveTo = length;
+    moveTo = moveTo + 1;
+    *moveTo = 0;
+    moveTo = moveTo + 1;
+    current = current + 1;
+    for (int i = 0; i < length; i++)
+    {
+      *moveTo = *current;
+      moveTo = moveTo + 1;
+      current = current + 1;
+    }
+
+  }
+
   return;
 }
 

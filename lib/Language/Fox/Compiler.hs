@@ -110,7 +110,15 @@ compileEnv env v@(Boolean {})    = [ compileImm env v  ]
 compileEnv env v@(Id {})         = [ compileImm env v  ]
 
 -- "clear" the stack position for 'x' after executing these instructions for e2
-compileEnv env (Let x e1 e2 _)   = error "TBD:compileEnv:Let"
+compileEnv env (Let x e1 e2 _)   = is ++ compileEnv env' e2 ++ [IMov (Const 0) (immArg env' x)]
+  where
+    (env', i, is)                = compileBind env (x, e1)
+
+
+--comp e1, pushenv x env
+--compile e1, push x env, compile e2 with env'
+                --now we want to kill off whateer x was pointing to
+           --move/set x location to 0 0 ->[ebp-4]
 
 compileEnv env (Prim1 o v l)     = compilePrim1 l env o v
 
@@ -124,12 +132,50 @@ compileEnv env (If v e1 e2 l)    = assertType env v TBoolean
     i1s                          = compileEnv env e1
     i2s                          = compileEnv env e2
 
-compileEnv env (Tuple es l)      = tupleReserve l (tupleSize (length es)) ++  -- DO NOT MODIFY THIS LINE 
-		   		   error "TBD:compileEnv:Tuple"
+compileEnv env (Tuple es l)      = tupleReserve l (tupleSize (length es))  -- DO NOT MODIFY THIS LINE 
+		   		                       ++ tupleAlloc (length es)
+                                 ++ tupleCopy env es 1
+                                 ++ [IMov (Reg EBX) (Const 0), IMov (tupleAddr ((length es) + 1)) (Reg EBX)]
+                                 ++ setTag EAX TTuple
 
-compileEnv env (GetItem vE vI _) = error "TBD:compileEnv:GetItem"
+compileEnv env (GetItem vE vI _) = assertType env vE TTuple
+                                 ++ assertType env vI TNumber
+                                 ++ [ IMov (Reg EAX) (immArg env vE) ]
+                                 ++ unsetTag EAX TTuple
+                                 ++ [ IMov (Reg EBX) (immArg env vI)
+                                 , ISar (Reg EBX) (Const 1)
+                                 , IAdd (Reg EBX) (Const 1)
+                                 , IMov (Reg EAX)  (Sized DWordPtr (RegIndex EAX EBX))]
 
 compileEnv env (App f vs _)      = call (DefStart f 0) (param env <$> vs)
+
+setTag :: Reg -> Ty -> [Instruction]
+setTag r ty = [ IAdd (Reg r) (typeTag ty) ]
+
+tupleAlloc :: Int -> [Instruction]
+tupleAlloc  l = [ IMov (Reg EAX) (Reg ESI)
+                , IMov (Sized DWordPtr (RegOffset 0 EAX)) (repr l)
+                , IAdd (Reg ESI) (Const (4 * i))  --TODO:: MISSING A A STEP? ^
+                , IMov (Reg EBX) (Const l)
+                , IShl (Reg EBX) (Const 1)       --TODO::??
+                , IMov (tupleAddr 0) (Reg EBX)
+                ]
+  where
+    i  | (l+ 1) `mod` 2 == 0 = (l + 1)
+       | otherwise = (l + 2)
+
+tupleCopy :: Env -> [Expr Tag] -> Int ->[Instruction]
+tupleCopy env [] i = []
+tupleCopy env (a:aa) i = [ IMov (Reg EBX) (immArg env a) 
+                       , IMov (tupleAddr i) (Reg EBX)
+                       ] ++ (tupleCopy env aa l)
+  where
+    l = i + 1
+
+tupleAddr fld = Sized DWordPtr (RegOffset (4 * fld) EAX)
+
+unsetTag :: Reg -> Ty -> [Instruction]
+unsetTag r ty = [ISub (Reg EAX) (typeTag ty)]
 
 compileImm :: Env -> IExp -> Instruction
 compileImm env v = IMov (Reg EAX) (immArg env v)
@@ -144,9 +190,21 @@ compileBind env (x, e) = (env', xi, is)
 compilePrim1 :: Tag -> Env -> Prim1 -> IExp -> [Instruction]
 compilePrim1 l env Add1    v = compilePrim2 l env Plus  v (Number 1 l)
 compilePrim1 l env Sub1    v = compilePrim2 l env Minus v (Number 1 l)
-compilePrim1 l env IsNum   v = error "TBD:compilePrim1:isNum"
-compilePrim1 l env IsBool  v = error "TBD:compilePrim1:isBool"
-compilePrim1 l env IsTuple v = error "TBD:compilePrim1:isTuple"
+compilePrim1 l env IsNum   v = let (_, i) = l in 
+                               cmpType env v TNumber ++ [ IJe (BranchTrue i)
+                               , IMov (Reg EAX) (Const 0x7fffffff), IJmp (BranchDone i)
+                               , ILabel (BranchTrue i), IMov (Reg EAX) (Const (-1))
+                               , ILabel (BranchDone i) ]
+compilePrim1 l env IsBool  v = let (_, i) = l in 
+                               cmpType env v TBoolean ++ [ IJe (BranchTrue i)
+                               , IMov (Reg EAX) (Const 0x7fffffff), IJmp (BranchDone i)
+                               , ILabel (BranchTrue i), IMov (Reg EAX) (Const (-1))
+                               , ILabel (BranchDone i) ]
+compilePrim1 l env IsTuple v = let (_, i) = l in 
+                               cmpType env v TTuple ++  [ IJe (BranchTrue i)
+                               , IMov (Reg EAX) (Const 0x7fffffff), IJmp (BranchDone i)
+                               , ILabel (BranchTrue i), IMov (Reg EAX) (Const (-1))
+                               , ILabel (BranchDone i) ]
 compilePrim1 _ env Print   v = call (Builtin "print") [param env v]
 
 compilePrim2 :: Tag -> Env -> Prim2 -> IExp -> IExp -> [Instruction]
