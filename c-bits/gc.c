@@ -186,7 +186,7 @@ void markTuple(int * tupleStart)
     tupleStart = tupleStart + 1;
     int temp = *tupleStart;
     if ((temp & 7) == 1)
-      markTuple(temp - 1);
+      markTuple((int *) (temp - 1));
   }
 }
 
@@ -212,7 +212,7 @@ int* mark( int* stack_top
     int current = *stack_top;
     if ((current & 7) == 1) //is tuple. go to heap.
     {
-      int * heap_current = (current - 1);
+      int * heap_current = (int *)(current - 1);
       markTuple(heap_current);
       if (heap_current > heap_max)
         heap_max = heap_current;
@@ -247,9 +247,9 @@ int* forward( int* heap_start
     }
     else if (*current == 1)
     {
-      *current = sendTo;        //CURRENTLY SETTING ADDRESS TO LENGTH CELL
+      *current = (int)sendTo;        //CURRENTLY SETTING ADDRESS TO LENGTH CELL
       *current = *current + 1;
-      sendTo = sendTo + (length + 2)
+      sendTo = sendTo + (length + 2);
       current = current + (length + 1);
     }
 
