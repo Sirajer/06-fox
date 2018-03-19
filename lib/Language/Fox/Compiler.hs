@@ -134,9 +134,7 @@ compileEnv env (If v e1 e2 l)    = assertType env v TBoolean
 
 compileEnv env (Tuple es l)      = tupleReserve l (tupleSize (length es))  -- DO NOT MODIFY THIS LINE 
 		   		                       ++ tupleAlloc (length es)
-                                 ++ [ IMov (Reg EBX) (Const (length es)), IShl (Reg EBX) (Const 1), IMov (tupleAddr 0) (Reg EBX) ]
-                                 ++ tupleCopy env es 1
-                                 ++ [IMov (Reg EBX) (Const 0), IMov (tupleAddr ((length es) + 1)) (Reg EBX)]
+                                 ++ fmlMan es
                                  ++ setTag EAX TTuple
 
 compileEnv env (GetItem vE vI _) = assertType env vE TTuple
@@ -149,6 +147,11 @@ compileEnv env (GetItem vE vI _) = assertType env vE TTuple
                                  , IMov (Reg EAX)  (Sized DWordPtr (RegIndex EAX EBX))]
 
 compileEnv env (App f vs _)      = call (DefStart f 0) (param env <$> vs)
+
+fmlMan :: [Arg] ->[ Instruction]
+fmlMan args = concat (zipWith fml [1..] args)
+  where
+    fml i a = [ IMov (Reg EBX) a, IMov (Sized DWordPtr (RegOffset (4*i) EAX) (Reg EBX))]
 
 setTag :: Reg -> Ty -> [Instruction]
 setTag r ty = [ IAdd (Reg r) (typeTag ty) ]
