@@ -110,7 +110,7 @@ compileEnv env v@(Boolean {})    = [ compileImm env v  ]
 compileEnv env v@(Id {})         = [ compileImm env v  ]
 
 -- "clear" the stack position for 'x' after executing these instructions for e2
-compileEnv env (Let x e1 e2 _)   = is ++ compileEnv env' e2 ++ [IMov (Const 0) (stackVar i)]
+compileEnv env (Let x e1 e2 _)   = is ++ compileEnv env' e2 ++ clearStackVar i 
   where
     (env', i, is)                = compileBind env (x, e1)
 
