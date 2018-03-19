@@ -134,7 +134,7 @@ compileEnv env (If v e1 e2 l)    = assertType env v TBoolean
 
 compileEnv env (Tuple es l)      = tupleReserve l (tupleSize (length es))  -- DO NOT MODIFY THIS LINE 
 		   		                       ++ tupleAlloc (length es)
-                                 ++ tupleCopy env es 1
+                                 ++ tupleCopy env es 2
                                  ++ [IMov (Reg EBX) (Const 0), IMov (tupleAddr ((length es) + 1)) (Reg EBX)]
                                  ++ setTag EAX TTuple
 
@@ -143,8 +143,8 @@ compileEnv env (GetItem vE vI _) = assertType env vE TTuple
                                  ++ [ IMov (Reg EAX) (immArg env vE) ]
                                  ++ unsetTag EAX TTuple
                                  ++ [ IMov (Reg EBX) (immArg env vI)
-                                 , IShr (Reg EBX) (Const 1)
-                                 , IAdd (Reg EBX) (Const 1)
+                                 , ISar (Reg EBX) (Const 1)
+                                 , IAdd (Reg EBX) (Const 2)
                                  , IMov (Reg EAX)  (Sized DWordPtr (RegIndex EAX EBX))]
 
 compileEnv env (App f vs _)      = call (DefStart f 0) (param env <$> vs)
@@ -159,10 +159,11 @@ tupleAlloc  l = [ IMov (Reg EAX) (Reg ESI)
                 , IMov (Reg EBX) (Const l)
                 , IShl (Reg EBX) (Const 1)       --TODO::??
                 , IMov (tupleAddr 0) (Reg EBX)
+                , IMov (tupleAddr 1) (Const 0)
                 ]
   where
-    i  | (l+ 1) `mod` 2 == 0 = (l + 1)
-       | otherwise = (l + 2)
+    i  | (l+ 2) `mod` 2 == 0 = (l + 2)
+       | otherwise = (l + 3)
 
 tupleCopy :: Env -> [Expr Tag] -> Int ->[Instruction]
 tupleCopy env [] i = []
