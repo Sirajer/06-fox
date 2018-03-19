@@ -136,7 +136,7 @@ compileEnv env (Tuple es l)      = tupleReserve l (tupleSize (length es))  -- DO
 		   		                       ++ tupleAlloc (length es)
                                  ++ tupleCopy env es 1
                                  ++ [IMov (Reg EBX) (Const 0), IMov (tupleAddr ((length es) + 1)) (Reg EBX)]
-                                 ++ setTag EAX TTuple
+                                 ++ setTag (Reg EAX) TTuple
 
 compileEnv env (GetItem vE vI _) = assertType env vE TTuple
                                  ++ assertType env vI TNumber
@@ -149,9 +149,9 @@ compileEnv env (GetItem vE vI _) = assertType env vE TTuple
 
 compileEnv env (App f vs _)      = call (DefStart f 0) (param env <$> vs)
 
-setTag :: Reg -> Ty -> [Instruction]
-setTag r ty = [ IAdd (Reg r) (typeTag ty) ]
-
+setTag :: Arg -> Ty -> [Instruction]
+setTag r ty = [ IAdd r (typeTag ty) ]
+--/////////////////////////////////UNDO/////////////////////////////////////////////////
 tupleAlloc :: Int -> [Instruction]
 tupleAlloc  l = [ IMov (Reg EAX) (Reg ESI)
                 , IMov (Sized DWordPtr (RegOffset 0 EAX)) (repr l)
@@ -164,8 +164,8 @@ tupleAlloc  l = [ IMov (Reg EAX) (Reg ESI)
     i  | (l+ 1) `mod` 2 == 0 = (l + 1)
        | otherwise = (l + 2)
 
-tupleCopy :: Env -> [Expr Tag] -> Int ->[Instruction]
-tupleCopy env [] i = []
+--tupleCopy :: Env -> [Expr Tag] -> Int ->[Instruction]
+tupleCopy env [] _ = []
 tupleCopy env (a:aa) i = [ IMov (Reg EBX) (immArg env a) 
                        , IMov (tupleAddr i) (Reg EBX)
                        ] ++ (tupleCopy env aa l)
