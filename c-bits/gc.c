@@ -175,6 +175,20 @@ void print_heap(int* heap, int size) {
   }
 }
 
+//helper function for mark
+void markTuple(int * tupleStart)
+{
+  int length = *tupleStart;
+  tupleStart = tupleStart + 1;
+  *tupleStart = 1;
+  for (int i = 0; i < length; i ++)
+  {
+    tupleStart = tupleStart + 1;
+    int temp = *tupleStart;
+    if ((temp & 7) == 1)
+      markTuple(temp - 1);
+  }
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // FILL THIS IN, see documentation in 'gc.h' ///////////////////////////////////
@@ -208,19 +222,7 @@ int* mark( int* stack_top
   return heap_max;
 }
 
-void markTuple(int * tupleStart)
-{
-  int length = *tupleStart;
-  tupleStart = tupleStart + 1;
-  *tupleStart = 1;
-  for (int i = 0; i < length; i ++)
-  {
-    tupleStart = tupleStart + 1;
-    int temp = *tupleStart;
-    if ((temp & 7) == 1)
-      markTuple(temp - 1);
-  }
-}
+
 //QUESTIONS: IS everything a tuple? heap start is guaranteed to be start of a tuple?
 //While true in mark
 
