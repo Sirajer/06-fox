@@ -134,9 +134,10 @@ compileEnv env (If v e1 e2 l)    = assertType env v TBoolean
 
 compileEnv env (Tuple es l)      = tupleReserve l (tupleSize (length es))  -- DO NOT MODIFY THIS LINE 
 		   		                       ++ tupleAlloc (length es)
+                                 ++ [ IMov (Reg EBX) (Const (length es)), IShl (Reg EBX) (Const 1), IMov (tupleAddr 0) (Reg EBX) ]
                                  ++ tupleCopy env es 1
                                  ++ [IMov (Reg EBX) (Const 0), IMov (tupleAddr ((length es) + 1)) (Reg EBX)]
-                                 ++ setTag (Reg EAX) TTuple
+                                 ++ setTag EAX TTuple
 
 compileEnv env (GetItem vE vI _) = assertType env vE TTuple
                                  ++ assertType env vI TNumber
@@ -149,23 +150,20 @@ compileEnv env (GetItem vE vI _) = assertType env vE TTuple
 
 compileEnv env (App f vs _)      = call (DefStart f 0) (param env <$> vs)
 
-setTag :: Arg -> Ty -> [Instruction]
-setTag r ty = [ IAdd r (typeTag ty) ]
--- | UNDOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO|
+setTag :: Reg -> Ty -> [Instruction]
+setTag r ty = [ IAdd (Reg r) (typeTag ty) ]
+
 tupleAlloc :: Int -> [Instruction]
 tupleAlloc  l = [ IMov (Reg EAX) (Reg ESI)
                 , IMov (Sized DWordPtr (RegOffset 0 EAX)) (repr l)
                 , IAdd (Reg ESI) (Const (4 * i))  --TODO:: MISSING A A STEP? ^
-                , IMov (Reg EBX) (Const l)
-                , IShl (Reg EBX) (Const 1)       --TODO::??
-                , IMov (tupleAddr 0) (Reg EBX)
                 ]
   where
     i  | (l+ 1) `mod` 2 == 0 = (l + 1)
        | otherwise = (l + 2)
 
---tupleCopy :: Env -> [Expr Tag] -> Int ->[Instruction]
-tupleCopy env [] _ = []
+tupleCopy :: Env -> [Expr Tag] -> Int ->[Instruction]
+tupleCopy env [] i = []
 tupleCopy env (a:aa) i = [ IMov (Reg EBX) (immArg env a) 
                        , IMov (tupleAddr i) (Reg EBX)
                        ] ++ (tupleCopy env aa l)
